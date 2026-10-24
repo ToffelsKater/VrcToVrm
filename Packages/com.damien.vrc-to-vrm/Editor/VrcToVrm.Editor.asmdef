@@ -1,0 +1,37 @@
+{
+    "name": "VrcToVrm.Editor",
+    "rootNamespace": "VrcToVrm",
+    "references": [
+        "UniGLTF",
+        "UniGLTF.Editor",
+        "UniHumanoid",
+        "VrmLib",
+        "VRM10",
+        "VRM10.Editor",
+        "VRM10.MToon10"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "VRCSDKBase.dll",
+        "VRCSDK3A.dll",
+        "VRC.Dynamics.dll",
+        "VRC.SDK3.Dynamics.PhysBone.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "VRC_TO_VRM_HAS_UNIVRM"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.vrmc.vrm",
+            "expression": "0.131.0",
+            "define": "VRC_TO_VRM_HAS_UNIVRM"
+        }
+    ],
+    "noEngineReferences": false
+}

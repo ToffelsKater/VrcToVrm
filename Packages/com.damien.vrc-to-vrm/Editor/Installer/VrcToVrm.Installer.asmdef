@@ -1,0 +1,26 @@
+{
+    "name": "VrcToVrm.Installer",
+    "rootNamespace": "VrcToVrm",
+    "references": [],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "Newtonsoft.Json.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "!VRC_TO_VRM_HAS_UNIVRM"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.vrmc.vrm",
+            "expression": "0.131.0",
+            "define": "VRC_TO_VRM_HAS_UNIVRM"
+        }
+    ],
+    "noEngineReferences": false
+}

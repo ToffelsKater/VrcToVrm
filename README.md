@@ -1,76 +1,71 @@
-# VPM Package Template
+# VRChat to VRM 1.0 Converter
 
-Starter for making Packages, including automation for building and publishing them.
+Unity editor tool that turns a VRChat avatar (anything with a VRC Avatar Descriptor, prefab or scene object) into a VRM 1.0 file.
+The source avatar is never changed: the tool works on a temporary copy and deletes it after export.
 
-Once you're all set up, you'll be able to push changes to this repository and have .zip and .unitypackage versions automatically generated, and a listing made which works in the VPM for delivering updates for this package. If you want to make a listing with a variety of packages, check out our [template-package-listing](https://github.com/vrchat-community/template-package-listing) repo.
+Website and VCC listing: https://toffelskater.github.io/VrcToVrm/
 
-## ▶ Getting Started
+## Requirements
 
-* Press [![Use This Template](https://user-images.githubusercontent.com/737888/185467681-e5fdb099-d99f-454b-8d9e-0760e5a6e588.png)](https://github.com/vrchat-community/template-package/generate)
-to start a new GitHub project based on this template.
-  * Choose a fitting repository name and description.
-  * Set the visibility to 'Public'. You can also choose 'Private' and change it later.
-  * You don't need to select 'Include all branches.'
-* Clone this repository locally using Git.
-  * If you're unfamiliar with Git and GitHub, [visit GitHub's documentation](https://docs.github.com/en/get-started/quickstart/git-and-github-learning-resources) to learn more.
-* Add the folder to Unity Hub and open it as a Unity Project.
-* After opening the project, wait while the VPM resolver is downloaded and added to your project.
-  * This gives you access to the VPM Package Maker and Package Resolver tools.
+- Unity **2022.3.22f1** (the version VRChat currently supports)
+- VRChat Avatars SDK 3.7 or newer
+- UniVRM **0.131.4** or newer (`com.vrmc.vrm` and `com.vrmc.gltf`, the VRM 1.0 packages). The tool installs it for you.
 
-## 🚇 Migrating Assets Package
-Full details at [Converting Assets to a VPM Package](https://vcc.docs.vrchat.com/guides/convert-unitypackage)
+## Install
 
-## ✏️ Working on Your Package
+1. Add this package, in one of two ways:
+   - VRChat Creator Companion: add the listing `https://toffelskater.github.io/VrcToVrm/index.json` (Settings > Packages > Add Repository), then add **VRChat to VRM 1.0 Converter** to your project.
+   - From disk: Window > Package Manager > + > Add package from disk > `Packages/com.damien.vrc-to-vrm/package.json`.
+2. If UniVRM is missing, a dialog asks to add it. Click **Add**. The tool adds the OpenUPM registry (scope `com.vrmc`) and `com.vrmc.vrm` 0.131.4 to `Packages/manifest.json`, and Unity downloads UniVRM. No git install is needed.
+   If you clicked **Later**, use **Tools > Install UniVRM for VRChat to VRM**. This menu item and the dialog go away once UniVRM is installed.
 
-* Delete the "Packages/com.vrchat.demo-template" directory or reuse it for your own package.
-  * If you reuse the package, don't forget to rename it and add generated meta files to your repository!
-* Update the `.gitignore` file in the "Packages" directory to include your package.
-  * For example, change `!com.vrchat.demo-template` to `!com.username.package-name`.
-  * `.gitignore` files normally *exclude* the contents of your "Packages" directory. This `.gitignore` in this template show how to *include* the demo package. You can easily change this out for your own package name.
-* Open the Unity project and work on your package's files in your favorite code editor.
-* When you're ready, commit and push your changes.
-* Once you've set up the automation as described below, you can easily publish new versions.
+The converter itself only compiles when UniVRM 0.131 or newer is present, so the project has no compile errors before then.
+A package.json cannot depend on a git URL or on a package from another registry, which is why UniVRM is not listed in its `dependencies`.
 
-## 🤖 Setting up the Automation
+To install UniVRM by hand instead, add these lines to `dependencies` in `Packages/manifest.json` (this needs git):
+```json
+"com.vrmc.gltf": "https://github.com/vrm-c/UniVRM.git?path=/Packages/UniGLTF#v0.131.4",
+"com.vrmc.vrm": "https://github.com/vrm-c/UniVRM.git?path=/Packages/VRM10#v0.131.4",
+```
 
-Create a repository variable with the name and value described below.
-For details on how to create repository variables, see [Creating Configuration Variables for a Repository](https://docs.github.com/en/actions/learn-github-actions/variables#creating-configuration-variables-for-a-repository).
-Make sure you are creating a **repository variable**, and not a **repository secret**.
+A project that already has an older UniVRM from a VCC listing (for example VRM Converter for VRChat, which ships `com.vrmc.gltf` 0.128) keeps that older UniGLTF. Remove it or update it to 0.131.4 first.
 
-* `PACKAGE_NAME`: the name of your package, like `com.vrchat.demo-template`.
+## Use
 
-Finally, go to the "Settings" page for your repo, then choose "Pages", and look for the heading "Build and deployment". Change the "Source" dropdown from "Deploy from a branch" to "GitHub Actions".
+1. Open **Tools > VRChat to VRM 1.0**.
+2. Drag the avatar into **Avatar**.
+3. Fill in the meta: name, authors, version, thumbnail and the license fields (who may use the avatar, commercial use, redistribution, and so on). Name and at least one author are required.
+4. Set the options and click **Export VRM 1.0**.
 
-That's it!
-Some other notes:
-* We highly recommend you keep the existing folder structure of this template.
-  * The root of the project should be a Unity project.
-  * Your packages should be in the "Packages" directory.
-  * If you deviate from this folder structure, you'll need to update the paths that assume your package is in the "Packages" directory on lines 24, 38, 41 and 57.
-* If you want to store and generate your web files in a folder other than "Website" in the root, you can change the `listPublicDirectory` item [here in build-listing.yml](.github/workflows/build-listing.yml#L17).
+If the avatar uses VRCFury or Modular Avatar, bake it first (for example Modular Avatar's Manual Bake). The tool reads the plain components only.
 
-## 🎉 Publishing a Release
+## What gets converted
 
-You can make a release by running the [Build Release](.github/workflows/release.yml) action. The version specified in your `package.json` file will be used to define the version of the release.
+| VRChat | VRM 1.0 |
+| --- | --- |
+| Humanoid Animator | Humanoid bones (pose set to T-pose when **Force T-Pose** is on) |
+| PhysBone | Spring per unbranched bone chain. Pull + stiffness map to stiffness, momentum to drag, gravity to gravity power, radius to joint radius. The PhysBone curves are applied per joint, and the endpoint position adds a tail bone. Ignore transforms are respected. |
+| PhysBone Collider | Spring bone collider plus collider group: sphere, capsule, plane, and the inside sphere and capsule variants |
+| Viseme blend shapes (aa, E, ih, oh, ou) | Expressions aa, ee, ih, oh, ou |
+| Jaw flap blend shape | Expression aa |
+| Eyelid blend shapes (blink, looking up, looking down) | Expressions blink, lookUp, lookDown |
+| View position | LookAt offset from the head (first-person eye point) |
+| Materials (lilToon, Poiyomi, Standard, UTS, MToon 0.x) | MToon 1.0: main texture and color, shade color and texture, normal map, emission, alpha mode (opaque, cutout, transparent), cutoff, culling, tiling, and lilToon outlines |
+| Objects tagged EditorOnly | Removed |
+| Disabled meshes | Not exported |
 
-## 📃 Rebuilding the Listing
+## Limitations
 
-Whenever you make a change to a release - manually publishing it, or manually creating, editing or deleting a release, the [Build Repo Listing](.github/workflows/build-listing.yml) action will make a new index of all the releases available, and publish them as a website hosted fore free on [GitHub Pages](https://pages.github.com/). This listing can be used by the VPM to keep your package up to date, and the generated index page can serve as a simple landing page with info for your package. The URL for your package will be in the format `https://username.github.io/repo-name`.
+- PhysBone and VRM spring bones are simulated differently, so the values are mapped approximately. Use the Stiffness, Drag and Gravity sliders to tune the result.
+- PhysBone angle limits, immobile, stretch and grab settings have no VRM 1.0 equivalent and are skipped.
+- At a branch below the PhysBone root, the segment from the parent to each branch does not swing. Split such chains into separate PhysBones if this is visible.
+- The emotion expressions (happy, angry, sad, relaxed, surprised) are not created: VRChat has no standard for them. Add them in UniVRM after importing the VRM.
+- Material conversion reads common property names only. Matcap, rim light and Poiyomi outlines are not converted.
 
-## 🏠 Customizing the Landing Page (Optional)
+## Development
 
-The action which rebuilds the listing also publishes a landing page. The source for this page is in `Website/index.html`. The automation system uses [Scriban](https://github.com/scriban/scriban) to fill in the objects like `{{ this }}` with information from the latest release's manifest, so it will stay up-to-date with the name, id and description that you provide there. You are welcome to modify this page however you want - just use the existing `{{ template.objects }}` to fill in that info wherever you like. The entire contents of your "Website" folder are published to your GitHub Page each time.
+This repository is a Unity 2022.3.22f1 project built from VRChat's package template. The package lives in `Packages/com.damien.vrc-to-vrm`.
 
-## 💻 Technical Stuff
-
-You are welcome to make your own changes to the automation process to make it fit your needs, and you can create Pull Requests if you have some changes you think we should adopt. Here's some more info on the included automation:
-
-### Build Release Action
-[release.yml](/.github/workflows/release.yml)
-
-This is a composite action combining a variety of existing GitHub Actions and some shell commands to create both a .zip of your Package and a .unitypackage. It creates a release which is named for the `version` in the `package.json` file found in your target Package, and publishes the zip, the unitypackage and the package.json file to this release.
-
-### Build Repo Listing
-[build-listing.yml](.github/workflows/build-listing.yml)
-
-This is a composite action which builds a vpm-compatible [Repo Listing](https://vcc.docs.vrchat.com/vpm/repos) based on the releases you've created. In order to find all your releases and combine them into a listing, it checks out [another repository](https://github.com/vrchat-community/package-list-action) which has a [Nuke](https://nuke.build/) project which includes the VPM core lib to have access to its types and methods. This project will be expanded to include more functionality in the future - for now, the action just calls its `BuildRepoListing` target.
+- **Build Release** (run it by hand in GitHub Actions) zips the package, makes a `.unitypackage`, and publishes a GitHub release tagged with the version from `package.json`.
+- **Build Repo Listing** runs after each release. It builds the VCC listing (`index.json`) and the website from `Website/` and deploys both to GitHub Pages.
+- `Website/index.html` and `Website/app.js` are [Scriban](https://github.com/scriban/scriban) templates. The listing build fills in `listingInfo` and `packages`, so `app.js` must never contain two opening braces in a row.

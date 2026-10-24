@@ -1,7 +1,7 @@
 {
   "name": "com.damien.vrc-to-vrm",
   "displayName": "VRChat to VRM 1.0 Converter",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "unity": "2022.3",
   "description": "Converts a VRChat avatar (VRC Avatar Descriptor) to a VRM 1.0 file: PhysBones to spring bones, PhysBone colliders to spring bone colliders, visemes and eyelids to expressions, materials to MToon 1.0.",
   "keywords": ["vrchat", "vrm", "vrm1", "physbone", "springbone", "converter"],

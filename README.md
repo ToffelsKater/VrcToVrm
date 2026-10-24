@@ -9,17 +9,18 @@ Website and VCC listing: https://toffelskater.github.io/VrcToVrm/
 
 - Unity **2022.3.22f1** (the version VRChat currently supports)
 - VRChat Avatars SDK 3.7 or newer
-- UniVRM **0.131.4** or newer (`com.vrmc.vrm` and `com.vrmc.gltf`, the VRM 1.0 packages). The tool installs it for you.
+- UniVRM **0.128** or newer (`com.vrmc.vrm` and `com.vrmc.gltf`, the VRM 1.0 packages). The tool installs it for you. Tested with 0.128.1 and 0.131.4.
 
 ## Install
 
 1. Add this package, in one of two ways:
    - VRChat Creator Companion: add the listing `https://toffelskater.github.io/VrcToVrm/index.json` (Settings > Packages > Add Repository), then add **VRChat to VRM 1.0 Converter** to your project.
    - From disk: Window > Package Manager > + > Add package from disk > `Packages/com.damien.vrc-to-vrm/package.json`.
-2. If UniVRM is missing, a dialog asks to add it. Click **Add**. The tool adds the OpenUPM registry (scope `com.vrmc`) and `com.vrmc.vrm` 0.131.4 to `Packages/manifest.json`, and Unity downloads UniVRM. No git install is needed.
+2. If UniVRM is missing, a dialog asks to add it. Click **Add**. The tool adds the OpenUPM registry (scope `com.vrmc`) and `com.vrmc.vrm` to `Packages/manifest.json`, and Unity downloads UniVRM. No git install is needed.
+   The version matches the UniGLTF (`com.vrmc.gltf`) already in the project, for example 0.128.1 from the VRM Converter for VRChat listing, because the two only compile together. Without one it installs 0.131.4.
    If you clicked **Later**, use **Tools > Install UniVRM for VRChat to VRM**. This menu item and the dialog go away once UniVRM is installed.
 
-The converter itself only compiles when UniVRM 0.131 or newer is present, so the project has no compile errors before then.
+The converter itself only compiles when UniVRM 0.128 or newer is present, so the project has no compile errors before then.
 A package.json cannot depend on a git URL or on a package from another registry, which is why UniVRM is not listed in its `dependencies`.
 
 To install UniVRM by hand instead, add these lines to `dependencies` in `Packages/manifest.json` (this needs git):
@@ -28,7 +29,11 @@ To install UniVRM by hand instead, add these lines to `dependencies` in `Package
 "com.vrmc.vrm": "https://github.com/vrm-c/UniVRM.git?path=/Packages/VRM10#v0.131.4",
 ```
 
-A project that already has an older UniVRM from a VCC listing (for example VRM Converter for VRChat, which ships `com.vrmc.gltf` 0.128) keeps that older UniGLTF. Remove it or update it to 0.131.4 first.
+### Troubleshooting
+
+**No VRChat to VRM menu, and compile errors in `com.vrmc.vrm`** (for example `'UniGLTFLogger' does not contain a definition for 'Warning'`): `com.vrmc.vrm` and `com.vrmc.gltf` have different versions. This happens when UniVRM is updated through a VCC listing later. In `Packages/manifest.json`, set `"com.vrmc.vrm"` to the version of `Packages/com.vrmc.gltf/package.json`.
+
+**UniVRM older than 0.128** (from an old VCC listing): update or remove it in VCC, then use **Tools > Install UniVRM for VRChat to VRM**.
 
 ## Use
 

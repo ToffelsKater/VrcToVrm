@@ -40,7 +40,8 @@ To install UniVRM by hand instead, add these lines to `dependencies` in `Package
 1. Open **Tools > VRChat to VRM 1.0**.
 2. Drag the avatar into **Avatar**.
 3. Fill in the meta: name, authors, version, thumbnail and the license fields (who may use the avatar, commercial use, redistribution, and so on). Name and at least one author are required.
-4. Set the options and click **Export VRM 1.0**.
+4. Set the options. Under **Blend shapes**, search for a shape and move its slider to bake it in at that weight (for example a body or face customization). Sliders start at the avatar's current weights.
+5. Click **Export VRM 1.0**.
 
 With **Bake first** on (the default), the copy is built the way an upload builds it before conversion: VRCFury, Modular Avatar and other NDMF tools apply their changes, the same as VRCFury's "Build an editor test copy". Afterwards the post-build cleanup runs, so lilToon restores its shader settings and NDMF removes its temporary files. Turn it off to convert the avatar exactly as it is in the scene.
 
@@ -58,6 +59,7 @@ With **Bake first** on (the default), the copy is built the way an upload builds
 | View position | LookAt offset from the head (first-person eye point) |
 | Materials (lilToon, Poiyomi, Standard, UTS, MToon 0.x) | MToon 1.0: main texture and color, shade color and texture, normal map, emission, alpha mode (opaque, cutout, transparent), cutoff, culling, tiling, and lilToon outlines |
 | VRCFury, Modular Avatar, other NDMF tools | Applied to the copy before conversion (**Bake first**) |
+| Blend shape weights (set in the scene, by a build tool, or with the window's sliders) | Baked into the base mesh. The blend shapes stay in the mesh at weight 0, so expressions still work. |
 | Objects tagged EditorOnly | Removed |
 | Disabled meshes | Not exported |
 

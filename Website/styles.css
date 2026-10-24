@@ -123,6 +123,7 @@ article.tile { cursor: default; }
 .mauve { --tile: #76608a; }
 .brown { --tile: #825a2c; }
 .indigo { --tile: #6a00ff; }
+.ocean { --tile: #00749e; }
 
 .glyph { position: absolute; left: 50%; top: 44%; translate: -50% -50%; font-size: 52px; }
 .wide .glyph { left: 50%; }

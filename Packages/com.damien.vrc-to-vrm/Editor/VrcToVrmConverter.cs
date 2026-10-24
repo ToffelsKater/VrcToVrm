@@ -12,8 +12,17 @@ using VRM10.MToon10;
 using Object = UnityEngine.Object;
 
 namespace VrcToVrm {
+    /// <summary>A blend shape weight the user set in the window, for the renderer at <see cref="Path"/> below the avatar root.</summary>
+    [Serializable]
+    public class BlendShapeOverride {
+        public string Path, Shape;
+        public float Weight;
+    }
+
     [Serializable]
     public class ConvertOptions {
+        // Weights to set before every non-zero blend shape is baked into its mesh.
+        public List<BlendShapeOverride> BlendShapes = new List<BlendShapeOverride>();
         // Run the upload build steps on the copy first, so VRCFury, Modular Avatar and other NDMF tools apply their changes.
         public bool Bake = true;
         public bool TPose = true;
@@ -45,6 +54,8 @@ namespace VrcToVrm {
                 var animator = root.GetComponent<Animator>();
                 if (!animator || !animator.isHuman) throw new InvalidOperationException("The avatar needs an Animator with a humanoid Avatar.");
                 if (o.TPose && !InternalTPose.TryMakePoseValid(root)) Debug.LogWarning("[VRC to VRM] Could not set the T-pose, exporting the current pose.");
+
+                BakeBlendShapes(root.transform, o.BlendShapes, temp);
 
                 var descriptor = root.GetComponent<VRCAvatarDescriptor>();
                 var eye = root.transform.TransformPoint(descriptor.ViewPosition);
@@ -79,6 +90,61 @@ namespace VrcToVrm {
                 foreach (var x in temp) if (x) Object.DestroyImmediate(x);
                 // lilToon restores its shader settings here and NDMF deletes its temporary assets
                 if (o.Bake) VRCBuildPipelineCallbacks.OnPostprocessAvatar();
+            }
+        }
+
+        /// <summary>
+        /// The exporter writes the base mesh only, so blend shape weights set in the scene would be lost.
+        /// Applies <paramref name="overrides"/>, then adds every non-zero blend shape to a copy of its mesh and sets the weight to 0.
+        /// The blend shapes stay in the mesh, so expression bindings keep their indices.
+        /// </summary>
+        static void BakeBlendShapes(Transform root, List<BlendShapeOverride> overrides, List<Object> temp) {
+            foreach (var smr in root.GetComponentsInChildren<SkinnedMeshRenderer>(true)) {
+                var mesh = smr.sharedMesh;
+                if (!mesh || mesh.blendShapeCount == 0) continue;
+                var path = UnityEditor.AnimationUtility.CalculateTransformPath(smr.transform, root);
+                foreach (var o in overrides.Where(o => o.Path == path)) {
+                    var i = mesh.GetBlendShapeIndex(o.Shape);
+                    if (i >= 0) smr.SetBlendShapeWeight(i, o.Weight); // missing when a build tool removed or renamed it
+                }
+                var shapes = Enumerable.Range(0, mesh.blendShapeCount).Where(i => smr.GetBlendShapeWeight(i) != 0).ToArray();
+                if (shapes.Length == 0) continue;
+
+                var baked = Object.Instantiate(mesh);
+                baked.name = mesh.name;
+                temp.Add(baked);
+                var v = baked.vertices;
+                var n = baked.normals;
+                var t = baked.tangents;
+                var dv = new Vector3[v.Length];
+                var dn = new Vector3[v.Length];
+                var dt = new Vector3[v.Length];
+                void Add(int shape, int frame, float scale) {
+                    mesh.GetBlendShapeFrameVertices(shape, frame, dv, dn, dt);
+                    for (var k = 0; k < v.Length; k++) {
+                        v[k] += dv[k] * scale;
+                        if (n.Length > 0) n[k] += dn[k] * scale;
+                        if (t.Length > 0) t[k] += (Vector4)(dt[k] * scale);
+                    }
+                }
+                foreach (var i in shapes) {
+                    // Unity blends between the two frames around the weight, and scales the first frame below it
+                    var w = smr.GetBlendShapeWeight(i);
+                    var hi = 0;
+                    while (hi < mesh.GetBlendShapeFrameCount(i) - 1 && mesh.GetBlendShapeFrameWeight(i, hi) < w) hi++;
+                    var wHi = mesh.GetBlendShapeFrameWeight(i, hi);
+                    var wLo = hi > 0 ? mesh.GetBlendShapeFrameWeight(i, hi - 1) : 0f;
+                    var f = wHi == wLo ? 1f : (w - wLo) / (wHi - wLo);
+                    Add(i, hi, f);
+                    if (hi > 0) Add(i, hi - 1, 1 - f);
+                    smr.SetBlendShapeWeight(i, 0);
+                }
+                for (var k = 0; k < n.Length; k++) n[k] = n[k].normalized;
+                baked.vertices = v;
+                if (n.Length > 0) baked.normals = n;
+                if (t.Length > 0) baked.tangents = t;
+                baked.RecalculateBounds();
+                smr.sharedMesh = baked;
             }
         }
 

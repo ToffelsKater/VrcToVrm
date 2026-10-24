@@ -14,6 +14,10 @@ namespace VrcToVrm {
         VRM10MetaEditor metaEditor;
         Vector2 scroll;
         float height; // of the picked avatar's meshes, 0 when unknown
+        [SerializeField] bool showShapes;
+        [SerializeField] string shapeSearch = "";
+        readonly HashSet<string> openMeshes = new HashSet<string>();
+        readonly List<(string path, SkinnedMeshRenderer smr)> shapeMeshes = new List<(string, SkinnedMeshRenderer)>();
 
         [MenuItem("Tools/VRChat to VRM 1.0")]
         static void Open() => GetWindow<VrcToVrmWindow>("VRC to VRM");
@@ -26,6 +30,48 @@ namespace VrcToVrm {
             }
             metaEditor = VRM10MetaEditor.Create(new SerializedObject(vrm));
             Measure();
+            ListShapes();
+        }
+
+        void ListShapes() {
+            shapeMeshes.Clear();
+            if (!avatar) return;
+            foreach (var smr in avatar.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                if (smr.sharedMesh && smr.sharedMesh.blendShapeCount > 0)
+                    shapeMeshes.Add((AnimationUtility.CalculateTransformPath(smr.transform, avatar.transform), smr));
+        }
+
+        void ShapesGUI() {
+            showShapes = EditorGUILayout.Foldout(showShapes, $"Blend shapes ({options.BlendShapes.Count} changed)", true);
+            if (!showShapes || !avatar) return;
+            EditorGUILayout.LabelField("Every non-zero blend shape is baked into the mesh. Sliders start at the avatar's current weights.", EditorStyles.wordWrappedMiniLabel);
+            shapeSearch = EditorGUILayout.TextField("Search", shapeSearch);
+            var searching = !string.IsNullOrWhiteSpace(shapeSearch);
+            foreach (var (path, smr) in shapeMeshes) {
+                if (!smr || !smr.sharedMesh) continue;
+                var mesh = smr.sharedMesh;
+                var matches = Enumerable.Range(0, mesh.blendShapeCount)
+                    .Where(i => !searching || mesh.GetBlendShapeName(i).IndexOf(shapeSearch, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+                if (matches.Count == 0) continue;
+                var open = EditorGUILayout.Foldout(searching || openMeshes.Contains(path), $"{path} ({mesh.blendShapeCount})", true);
+                if (!searching) {
+                    if (open) openMeshes.Add(path);
+                    else openMeshes.Remove(path);
+                }
+                if (!open) continue;
+                EditorGUI.indentLevel++;
+                foreach (var i in matches) {
+                    var name = mesh.GetBlendShapeName(i);
+                    var o = options.BlendShapes.Find(x => x.Path == path && x.Shape == name);
+                    EditorGUI.BeginChangeCheck();
+                    var w = EditorGUILayout.Slider(name, o?.Weight ?? smr.GetBlendShapeWeight(i), 0, 100);
+                    if (!EditorGUI.EndChangeCheck()) continue;
+                    if (o == null) options.BlendShapes.Add(o = new BlendShapeOverride { Path = path, Shape = name });
+                    o.Weight = w;
+                }
+                EditorGUI.indentLevel--;
+            }
+            if (options.BlendShapes.Count > 0 && GUILayout.Button("Reset to the avatar's weights")) options.BlendShapes.Clear();
         }
 
         void OnDestroy() => DestroyImmediate(vrm);
@@ -54,6 +100,8 @@ namespace VrcToVrm {
                 avatar = picked;
                 if (avatar && string.IsNullOrEmpty(vrm.Meta.Name)) vrm.Meta.Name = avatar.name;
                 Measure();
+                options.BlendShapes.Clear();
+                ListShapes();
             }
 
             EditorGUILayout.Space();
@@ -77,6 +125,9 @@ namespace VrcToVrm {
             options.StiffnessScale = EditorGUILayout.Slider("Stiffness ×", options.StiffnessScale, 0, 4);
             options.DragScale = EditorGUILayout.Slider("Drag ×", options.DragScale, 0, 2);
             options.GravityScale = EditorGUILayout.Slider("Gravity ×", options.GravityScale, 0, 4);
+
+            EditorGUILayout.Space();
+            ShapesGUI();
 
             EditorGUILayout.Space();
             var errors = vrm.Meta.Validate().Where(v => !v.CanExport).Select(v => v.Message).ToList();

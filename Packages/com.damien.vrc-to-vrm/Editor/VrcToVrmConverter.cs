@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using UniGLTF;
+using UniJSON;
 using UnityEngine;
 using UniVRM10;
 using VRC.Dynamics;
@@ -71,6 +73,8 @@ namespace VrcToVrm {
                     child.localScale = Vector3.Scale(child.localScale, s);
                 }
                 eye *= k;
+                foreach (var t in root.GetComponentsInChildren<Transform>(true)) t.localScale = Snap(t.localScale);
+                ClearParents(root.transform, animator.GetBoneTransform(HumanBodyBones.Hips));
 
                 var vrm = ScriptableObject.CreateInstance<VRM10Object>();
                 temp.Add(vrm);
@@ -81,6 +85,7 @@ namespace VrcToVrm {
                     throw new InvalidOperationException("Could not read the humanoid bones from the Animator.");
 
                 Expressions(root.transform, descriptor, vrm.Expression, temp);
+                MergeMeshes(root.transform, vrm.Expression, temp);
                 vrm.LookAt.OffsetFromHead = eye - animator.GetBoneTransform(HumanBodyBones.Head).position;
                 Springs(root.transform, instance.SpringBone, o);
                 if (o.ConvertMaterials) Materials(root, temp);
@@ -91,6 +96,180 @@ namespace VrcToVrm {
                 // lilToon restores its shader settings here and NDMF deletes its temporary assets
                 if (o.Bake) VRCBuildPipelineCallbacks.OnPostprocessAvatar();
             }
+        }
+
+        // FBX import leaves float noise like (1, 0.9999999, 0.9999999)
+        static Vector3 Snap(Vector3 s) {
+            var u = (s.x + s.y + s.z) / 3;
+            var e = 1e-5f * Mathf.Abs(u);
+            if (Mathf.Abs(s.x - u) > e || Mathf.Abs(s.y - u) > e || Mathf.Abs(s.z - u) > e) return s;
+            return Vector3.one * (Mathf.Abs(u - 1) < 1e-5f ? 1 : u);
+        }
+
+        /// <summary>
+        /// Importers expect the skeleton's parents at identity. A Blender "Armature" holds the Z-up conversion as -90° X, which Hips undoes.
+        /// Moves each parent's transform onto its children, top down, so the parents end at identity and Hips has no rotation left.
+        /// World poses stay the same.
+        /// </summary>
+        static void ClearParents(Transform root, Transform hips) {
+            var parents = new List<Transform>();
+            for (var p = hips.parent; p && p != root; p = p.parent) parents.Insert(0, p);
+            foreach (var p in parents) {
+                foreach (Transform c in p) {
+                    c.localPosition = p.localPosition + p.localRotation * Vector3.Scale(p.localScale, c.localPosition);
+                    c.localRotation = p.localRotation * c.localRotation;
+                    if (Quaternion.Angle(c.localRotation, Quaternion.identity) < .01f) c.localRotation = Quaternion.identity;
+                    c.localScale = Vector3.Scale(p.localScale, c.localScale);
+                }
+                p.localPosition = Vector3.zero;
+                p.localRotation = Quaternion.identity;
+                p.localScale = Vector3.one;
+            }
+        }
+
+        // Shape list headings like "======= EYE MORPH =======". They often move a vertex by a fraction of a millimetre so tools keep them.
+        static readonly Regex Separator = new Regex(@"^\s*([=\-*~#])\1\1");
+
+        /// <summary>
+        /// Merges the exported skinned meshes into one mesh with one submesh per material. Each blend shape name then exists once and
+        /// moves body and clothing together; Unreal renames every morph when names repeat across meshes. Names match ignoring case,
+        /// as in Unreal. Separators and shapes that move nothing are dropped.
+        /// The vertices are skinned into the current pose, which becomes the bind pose. Expression bindings follow the shapes.
+        /// </summary>
+        static void MergeMeshes(Transform root, VRM10ObjectExpression expression, List<Object> temp) {
+            // the exporter skips inactive and disabled renderers
+            var sources = root.GetComponentsInChildren<SkinnedMeshRenderer>().Where(r => r.enabled && r.sharedMesh).ToList();
+            if (sources.Count == 0) return;
+
+            var bones = new List<Transform>();
+            var boneIndex = new Dictionary<Transform, int>();
+            int Bone(Transform t) {
+                if (!boneIndex.TryGetValue(t, out var i)) {
+                    boneIndex[t] = i = bones.Count;
+                    bones.Add(t);
+                }
+                return i;
+            }
+            var positions = new List<Vector3>();
+            var normals = new List<Vector3>();
+            var uvs = new List<Vector2>();
+            var colors = new List<Color>();
+            var hasColors = false;
+            var weights = new List<BoneWeight>();
+            var submeshes = new List<(Material material, List<int> indices)>();
+            var shapes = new List<(string name, List<(int vertex, Vector3 delta)> deltas)>();
+            var shapeIndex = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var remap = new Dictionary<(string path, int shape), int>();
+
+            foreach (var smr in sources) {
+                var mesh = smr.sharedMesh;
+                var offset = positions.Count;
+                var v = mesh.vertices;
+                var n = mesh.normals;
+                var uv = mesh.uv;
+                var c = mesh.colors;
+                hasColors |= c.Length > 0;
+                // without skin weights the vertices follow the renderer's transform, as do weights on a missing bone
+                var rigid = smr.bones.Length == 0 || mesh.boneWeights.Length != v.Length;
+                var src = rigid ? new[] { smr.transform } : smr.bones;
+                var bp = mesh.bindposes;
+                var skin = src.Select((b, i) => !rigid && b && i < bp.Length ? b.localToWorldMatrix * bp[i] : smr.transform.localToWorldMatrix).ToArray();
+                var map = src.Select(b => Bone(b ? b : smr.transform)).ToArray();
+                var bw = rigid ? Enumerable.Repeat(new BoneWeight { weight0 = 1 }, v.Length).ToArray() : mesh.boneWeights;
+
+                for (var i = 0; i < v.Length; i++) {
+                    var w = bw[i];
+                    var p = Skin(skin, w, v[i]);
+                    positions.Add(p);
+                    // skinning is affine, so the difference of two skinned points skins a direction
+                    normals.Add(i < n.Length ? (Skin(skin, w, v[i] + n[i]) - p).normalized : Vector3.up);
+                    uvs.Add(i < uv.Length ? uv[i] : Vector2.zero);
+                    colors.Add(i < c.Length ? c[i] : Color.white);
+                    weights.Add(new BoneWeight {
+                        boneIndex0 = map[w.boneIndex0], weight0 = w.weight0,
+                        boneIndex1 = map[w.boneIndex1], weight1 = w.weight1,
+                        boneIndex2 = map[w.boneIndex2], weight2 = w.weight2,
+                        boneIndex3 = map[w.boneIndex3], weight3 = w.weight3,
+                    });
+                }
+
+                var mats = smr.sharedMaterials;
+                for (var s = 0; s < mesh.subMeshCount && s < mats.Length; s++) {
+                    if (mesh.GetTopology(s) != MeshTopology.Triangles) continue;
+                    var k = submeshes.FindIndex(x => x.material == mats[s]);
+                    if (k < 0) {
+                        k = submeshes.Count;
+                        submeshes.Add((mats[s], new List<int>()));
+                    }
+                    submeshes[k].indices.AddRange(mesh.GetTriangles(s).Select(i => i + offset));
+                }
+
+                var path = UniVRM10.UnityExtensions.RelativePathFrom(smr.transform, root);
+                var dv = new Vector3[v.Length];
+                var used = new HashSet<int>();
+                for (var s = 0; s < mesh.blendShapeCount; s++) {
+                    var name = mesh.GetBlendShapeName(s);
+                    if (Separator.IsMatch(name)) continue;
+                    mesh.GetBlendShapeFrameVertices(s, mesh.GetBlendShapeFrameCount(s) - 1, dv, null, null); // the frame the exporter writes
+                    var deltas = new List<(int, Vector3)>();
+                    for (var i = 0; i < v.Length; i++)
+                        if (dv[i] != Vector3.zero)
+                            deltas.Add((offset + i, Skin(skin, bw[i], v[i] + dv[i]) - positions[offset + i]));
+                    if (deltas.Count == 0) continue;
+                    if (shapeIndex.TryGetValue(name, out var k) && used.Add(k)) {
+                        shapes[k].deltas.AddRange(deltas);
+                    } else {
+                        while (shapeIndex.ContainsKey(name)) name += "_"; // two names on one mesh that differ only in case
+                        shapeIndex[name] = k = shapes.Count;
+                        used.Add(k);
+                        shapes.Add((name, deltas));
+                    }
+                    remap[(path, s)] = k;
+                }
+            }
+
+            var merged = new Mesh {
+                name = root.name,
+                indexFormat = positions.Count > 65535 ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16,
+            };
+            temp.Add(merged);
+            merged.SetVertices(positions);
+            merged.SetNormals(normals);
+            merged.SetUVs(0, uvs);
+            if (hasColors) merged.SetColors(colors);
+            merged.boneWeights = weights.ToArray();
+            // the new renderer sits on the root at the origin, so each bind pose is the bone's current world pose
+            merged.bindposes = bones.Select(b => b.worldToLocalMatrix).ToArray();
+            merged.subMeshCount = submeshes.Count;
+            for (var s = 0; s < submeshes.Count; s++) merged.SetTriangles(submeshes[s].indices, s);
+            var buffer = new Vector3[positions.Count];
+            foreach (var (name, deltas) in shapes) {
+                foreach (var (i, d) in deltas) buffer[i] = d;
+                merged.AddBlendShapeFrame(name, 100, buffer, null, null);
+                foreach (var (i, _) in deltas) buffer[i] = Vector3.zero;
+            }
+            merged.RecalculateBounds();
+
+            var rootBone = sources.Select(x => x.rootBone).FirstOrDefault(b => b && boneIndex.ContainsKey(b));
+            foreach (var smr in sources) {
+                var t = smr.transform;
+                Object.DestroyImmediate(smr);
+                // drop the emptied node unless something still hangs on it
+                if (t.childCount == 0 && !boneIndex.ContainsKey(t) && t.GetComponents<Component>().Length == 1) Object.DestroyImmediate(t.gameObject);
+            }
+            var host = new GameObject(root.Find("Body") ? root.name + " Body" : "Body");
+            host.transform.SetParent(root, false);
+            var r = host.AddComponent<SkinnedMeshRenderer>();
+            r.sharedMesh = merged;
+            r.bones = bones.ToArray();
+            r.rootBone = rootBone;
+            r.sharedMaterials = submeshes.Select(x => x.material).ToArray();
+
+            foreach (var (_, clip) in expression.Clips)
+                clip.MorphTargetBindings = clip.MorphTargetBindings
+                    .Where(b => remap.ContainsKey((b.RelativePath, b.Index)))
+                    .Select(b => new MorphTargetBinding(host.name, remap[(b.RelativePath, b.Index)], b.Weight))
+                    .Distinct().ToArray();
         }
 
         /// <summary>
@@ -192,9 +371,82 @@ namespace VrcToVrm {
                 var converter = new ModelExporter();
                 var model = converter.Export(settings, arrayManager, root);
                 model.ConvertCoordinate(VrmLib.Coordinates.Vrm1);
-                exporter.Export(root, model, converter, new VrmLib.ExportArgs { sparse = true }, meta);
-                File.WriteAllBytes(path, exporter.Storage.ToGlbBytes());
+                // morph normals are never filled in (positions only), so they would be zeros
+                exporter.Export(root, model, converter, new VrmLib.ExportArgs { sparse = true, removeMorphNormal = true }, meta);
+                // Unreal warns about meshes without default morph weights. The base mesh already holds the baked weights, so all are 0.
+                foreach (var mesh in exporter.Storage.Gltf.meshes) {
+                    var targets = mesh.primitives[0].targets?.Count ?? 0;
+                    if (targets > 0) mesh.weights = new float[targets];
+                }
+                File.WriteAllBytes(path, ShrinkZeroTargets(exporter.Storage));
             }
+        }
+
+        /// <summary>
+        /// Every primitive of a glTF mesh carries every morph target, so after the merge most targets are zero on most primitives.
+        /// The exporter writes those as dense arrays: a gigabyte for 700 morphs on 7 materials. This turns each into a sparse accessor
+        /// with one entry (vertex 0 moves by zero), leaves their bytes out, and returns the .vrm bytes.
+        /// </summary>
+        static byte[] ShrinkZeroTargets(ExportingGltfData data) {
+            var gltf = data.Gltf;
+            var zeroIndex = data.ExtendBufferAndGetViewIndex(new[] { 0 });
+            var zeroValue = data.ExtendBufferAndGetViewIndex(new[] { Vector3.zero });
+            // with sparse on, the exporter writes a target densely only when every delta is zero
+            foreach (var target in gltf.meshes.SelectMany(m => m.primitives).SelectMany(p => p.targets)) {
+                if (target.POSITION < 0) continue;
+                var a = gltf.accessors[target.POSITION];
+                if (a.sparse != null || !(a.bufferView >= 0)) continue;
+                a.bufferView = null;
+                a.byteOffset = null;
+                a.min = new float[3];
+                a.max = new float[3];
+                a.sparse = new glTFSparse {
+                    count = 1,
+                    indices = new glTFSparseIndices { bufferView = zeroIndex, componentType = glComponentType.UNSIGNED_INT },
+                    values = new glTFSparseValues { bufferView = zeroValue },
+                };
+            }
+
+            // copy the views still in use into a new buffer
+            var used = new HashSet<int>();
+            foreach (var a in gltf.accessors) {
+                if (a.bufferView >= 0) used.Add(a.bufferView.Value);
+                if (a.sparse == null) continue;
+                used.Add(a.sparse.indices.bufferView);
+                used.Add(a.sparse.values.bufferView);
+            }
+            var images = gltf.images.Where(x => string.IsNullOrEmpty(x.uri)).ToList();
+            foreach (var x in images) used.Add(x.bufferView);
+            var bin = data.BinBytes;
+            var bytes = new MemoryStream();
+            var map = new int[gltf.bufferViews.Count];
+            var views = new List<glTFBufferView>();
+            for (var i = 0; i < gltf.bufferViews.Count; i++) {
+                if (!used.Contains(i)) continue;
+                var v = gltf.bufferViews[i];
+                while (bytes.Length % 4 != 0) bytes.WriteByte(0);
+                var offset = (int)bytes.Length;
+                bytes.Write(bin.Array, bin.Offset + v.byteOffset, v.byteLength);
+                v.byteOffset = offset;
+                map[i] = views.Count;
+                views.Add(v);
+            }
+            while (bytes.Length % 4 != 0) bytes.WriteByte(0);
+            foreach (var a in gltf.accessors) {
+                if (a.bufferView >= 0) a.bufferView = map[a.bufferView.Value];
+                if (a.sparse == null) continue;
+                a.sparse.indices.bufferView = map[a.sparse.indices.bufferView];
+                a.sparse.values.bufferView = map[a.sparse.values.bufferView];
+            }
+            foreach (var x in images) x.bufferView = map[x.bufferView];
+            gltf.bufferViews = views;
+            gltf.buffers[0].byteLength = (int)bytes.Length;
+
+            // same as ExportingGltfData.ToGlbBytes, with the new buffer
+            var f = new JsonFormatter();
+            GltfSerializer.Serialize(f, gltf);
+            var json = GltfJsonUtil.FindUsedExtensionsAndUpdateJson(f.ToString());
+            return Glb.Create(json, new ArraySegment<byte>(bytes.GetBuffer(), 0, (int)bytes.Length)).ToBytes();
         }
 
         static void Expressions(Transform root, VRCAvatarDescriptor d, VRM10ObjectExpression e, List<Object> temp) {

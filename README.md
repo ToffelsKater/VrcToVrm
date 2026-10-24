@@ -50,7 +50,7 @@ With **Bake first** on (the default), the copy is built the way an upload builds
 | VRChat | VRM 1.0 |
 | --- | --- |
 | Humanoid Animator | Humanoid bones (pose set to T-pose when **Force T-Pose** is on) |
-| Avatar size, including a scaled avatar root | Scaled so the meshes are 1.6 m tall when **Scale to height** is on (change the height in the window, or turn it off to keep the original size). The window shows the avatar's current height and the factor. Height runs from the lowest to the highest vertex, so ears and hair count. |
+| Avatar size, including a scaled avatar root | Scaled so the meshes are 1.6 m tall when **Scale to height** is on (change the height in the window, or turn it off to keep the original size). The window shows the avatar's current height and the factor, and **Show height in scene** draws a person of that height next to the avatar in the Scene view. Height runs from the lowest to the highest vertex, so ears and hair count. |
 | PhysBone | Spring per unbranched bone chain. Pull + stiffness map to stiffness, momentum to drag, gravity to gravity power, radius to joint radius. The PhysBone curves are applied per joint, and the endpoint position adds a tail bone. Ignore transforms are respected. |
 | PhysBone Collider | Spring bone collider plus collider group: sphere, capsule, plane, and the inside sphere and capsule variants |
 | Viseme blend shapes (aa, E, ih, oh, ou) | Expressions aa, ee, ih, oh, ou |
@@ -60,6 +60,8 @@ With **Bake first** on (the default), the copy is built the way an upload builds
 | Materials (lilToon, Poiyomi, Standard, UTS, MToon 0.x) | MToon 1.0: main texture and color, shade color and texture, normal map, emission, alpha mode (opaque, cutout, transparent), cutoff, culling, tiling, and lilToon outlines |
 | VRCFury, Modular Avatar, other NDMF tools | Applied to the copy before conversion (**Bake first**) |
 | Blend shape weights (set in the scene, by a build tool, or with the window's sliders) | Baked into the base mesh. The blend shapes stay in the mesh at weight 0, so expressions still work. |
+| Skinned meshes | Merged into one mesh with one primitive per material, so each blend shape name exists once and moves body and clothing together. Names that differ only in case are merged (Unreal treats them as the same). Separator shapes (names starting with `===`, `---`, `***`, `~~~` or `###`) and blend shapes that move nothing are dropped. The current pose becomes the bind pose. |
+| Rotated or scaled armature object (Blender's -90° X) | Moved onto the bones, so the nodes above Hips are at identity. Float noise in scales (0.9999999) is rounded off. |
 | Objects tagged EditorOnly | Removed |
 | Disabled meshes | Not exported |
 

@@ -14,6 +14,7 @@ namespace VrcToVrm {
         VRM10MetaEditor metaEditor;
         Vector2 scroll;
         float height; // of the picked avatar's meshes, 0 when unknown
+        [SerializeField] bool showHeight;
         [SerializeField] bool showShapes;
         [SerializeField] string shapeSearch = "";
         readonly HashSet<string> openMeshes = new HashSet<string>();
@@ -31,6 +32,30 @@ namespace VrcToVrm {
             metaEditor = VRM10MetaEditor.Create(new SerializedObject(vrm));
             Measure();
             ListShapes();
+            SceneView.duringSceneGui += DrawHeight;
+        }
+
+        void OnDisable() => SceneView.duringSceneGui -= DrawHeight;
+
+        // A stick figure of the target height beside the avatar, with a dotted line across the avatar at that height
+        void DrawHeight(SceneView view) {
+            if (!showHeight || !avatar || EditorUtility.IsPersistent(avatar)) return;
+            var h = options.TargetHeight;
+            var right = Vector3.ProjectOnPlane(view.camera.transform.right, Vector3.up).normalized;
+            var off = Mathf.Max(height, h) * .6f;
+            var foot = avatar.transform.position + right * off;
+            Vector3 P(float x, float y) => foot + (right * x + Vector3.up * y) * h;
+            Handles.color = Color.cyan;
+            Handles.DrawWireDisc(P(0, .935f), Vector3.Cross(right, Vector3.up), .065f * h);
+            Handles.DrawLines(new[] {
+                P(0, .87f), P(0, .52f), // spine
+                P(-.13f, .82f), P(.13f, .82f), // shoulders
+                P(-.13f, .82f), P(-.18f, .5f), P(.13f, .82f), P(.18f, .5f), // arms
+                P(0, .52f), P(-.09f, 0), P(0, .52f), P(.09f, 0), // legs
+            });
+            var top = avatar.transform.position + Vector3.up * h;
+            Handles.DrawDottedLine(top - right * off, top + right * off, 4);
+            Handles.Label(P(0, 1.08f), $"{h:0.00} m");
         }
 
         void ListShapes() {
@@ -121,6 +146,8 @@ namespace VrcToVrm {
                 EditorGUILayout.LabelField(" ", options.ScaleToHeight
                     ? $"Avatar is {height:0.00} m tall, exported at ×{options.TargetHeight / height:0.##}"
                     : $"Avatar is {height:0.00} m tall", EditorStyles.miniLabel);
+            showHeight = EditorGUILayout.Toggle(new GUIContent("Show height in scene",
+                "Draws a person of the height above next to the avatar in the Scene view (avatar must be in the open scene)"), showHeight);
             EditorGUILayout.LabelField("Spring bone tuning (PhysBone values are mapped approximately)", EditorStyles.miniLabel);
             options.StiffnessScale = EditorGUILayout.Slider("Stiffness ×", options.StiffnessScale, 0, 4);
             options.DragScale = EditorGUILayout.Slider("Drag ×", options.DragScale, 0, 2);
@@ -137,6 +164,7 @@ namespace VrcToVrm {
                 if (GUILayout.Button("Export VRM 1.0", GUILayout.Height(30))) Export();
 
             EditorGUILayout.EndScrollView();
+            if (GUI.changed) SceneView.RepaintAll();
         }
 
         void Export() {

@@ -15,6 +15,9 @@ namespace VrcToVrm {
     public class ConvertOptions {
         public bool TPose = true;
         public bool ConvertMaterials = true;
+        // Tiny or huge avatars are scaled so the mesh is this tall (metres); most VRM games expect human size.
+        public bool ScaleToHeight = true;
+        public float TargetHeight = 1.6f;
         // PhysBone and VRM spring bones integrate differently, so the mapping is approximate. These scale the result.
         public float StiffnessScale = 1, DragScale = 1, GravityScale = 1;
     }
@@ -37,6 +40,21 @@ namespace VrcToVrm {
                 if (!animator || !animator.isHuman) throw new InvalidOperationException("The avatar needs an Animator with a humanoid Avatar.");
                 if (o.TPose && !InternalTPose.TryMakePoseValid(root)) Debug.LogWarning("[VRC to VRM] Could not set the T-pose, exporting the current pose.");
 
+                var descriptor = root.GetComponent<VRCAvatarDescriptor>();
+                var eye = root.transform.TransformPoint(descriptor.ViewPosition);
+                var height = MeasureHeight(root);
+                var k = o.ScaleToHeight && height > 0.01f ? o.TargetHeight / height : 1f;
+                // The exporter only writes the root's children, so the root's own scale would be lost.
+                // Move it onto them together with the height factor. Scaling is about the origin, so the feet stay at y = 0.
+                // ponytail: a non-uniform root scale stays non-uniform on the children, which VRM 1.0 forbids; bake the mesh if that ever shows up.
+                var s = root.transform.localScale * k;
+                root.transform.localScale = Vector3.one;
+                foreach (Transform child in root.transform) {
+                    child.localPosition = Vector3.Scale(child.localPosition, s);
+                    child.localScale = Vector3.Scale(child.localScale, s);
+                }
+                eye *= k;
+
                 var vrm = ScriptableObject.CreateInstance<VRM10Object>();
                 temp.Add(vrm);
                 var instance = root.AddComponent<Vrm10Instance>(); // also adds UniHumanoid.Humanoid
@@ -45,10 +63,8 @@ namespace VrcToVrm {
                 if (!root.GetComponent<UniHumanoid.Humanoid>().AssignBonesFromAnimator())
                     throw new InvalidOperationException("Could not read the humanoid bones from the Animator.");
 
-                var descriptor = root.GetComponent<VRCAvatarDescriptor>();
                 Expressions(root.transform, descriptor, vrm.Expression, temp);
-                var head = animator.GetBoneTransform(HumanBodyBones.Head);
-                vrm.LookAt.OffsetFromHead = root.transform.TransformPoint(descriptor.ViewPosition) - head.position;
+                vrm.LookAt.OffsetFromHead = eye - animator.GetBoneTransform(HumanBodyBones.Head).position;
                 Springs(root.transform, instance.SpringBone, o);
                 if (o.ConvertMaterials) Materials(root, temp);
 
@@ -57,6 +73,38 @@ namespace VrcToVrm {
                 foreach (var x in temp) if (x) Object.DestroyImmediate(x);
             }
         }
+
+        /// <summary>World height of the visible meshes, lowest to highest vertex. Skips EditorOnly objects, particles and other effects.</summary>
+        public static float MeasureHeight(GameObject root) {
+            float min = float.PositiveInfinity, max = float.NegativeInfinity;
+            foreach (var r in root.GetComponentsInChildren<Renderer>()) {
+                if (!r.enabled || r.GetComponentsInParent<Transform>(true).Any(t => t.CompareTag("EditorOnly"))) continue;
+                if (r is SkinnedMeshRenderer smr && smr.sharedMesh) {
+                    // Skin on the CPU from the live bones: SkinnedMeshRenderer.BakeMesh reuses stale bone matrices in the editor
+                    // and misses the T-pose and scale changes made just before. Blend shapes are ignored.
+                    var mesh = smr.sharedMesh;
+                    var bindposes = mesh.bindposes;
+                    var skin = smr.bones.Select((b, i) => b && i < bindposes.Length ? b.localToWorldMatrix * bindposes[i] : Matrix4x4.zero).ToArray();
+                    var weights = mesh.boneWeights;
+                    var vertices = mesh.vertices;
+                    for (var i = 0; i < vertices.Length; i++) {
+                        var y = skin.Length == 0 || weights.Length == 0
+                            ? smr.transform.TransformPoint(vertices[i]).y
+                            : Skin(skin, weights[i], vertices[i]).y;
+                        min = Mathf.Min(min, y);
+                        max = Mathf.Max(max, y);
+                    }
+                } else if (r is MeshRenderer) {
+                    min = Mathf.Min(min, r.bounds.min.y);
+                    max = Mathf.Max(max, r.bounds.max.y);
+                }
+            }
+            return max > min ? max - min : 0;
+        }
+
+        static Vector3 Skin(Matrix4x4[] skin, BoneWeight w, Vector3 v) =>
+            skin[w.boneIndex0].MultiplyPoint3x4(v) * w.weight0 + skin[w.boneIndex1].MultiplyPoint3x4(v) * w.weight1 +
+            skin[w.boneIndex2].MultiplyPoint3x4(v) * w.weight2 + skin[w.boneIndex3].MultiplyPoint3x4(v) * w.weight3;
 
         // same steps as UniVRM's VRM10ExportDialog.ExportPath
         static void Export(GameObject root, VRM10ObjectMeta meta, string path) {

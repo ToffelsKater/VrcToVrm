@@ -44,6 +44,7 @@ If the avatar uses VRCFury or Modular Avatar, bake it first (for example Modular
 | VRChat | VRM 1.0 |
 | --- | --- |
 | Humanoid Animator | Humanoid bones (pose set to T-pose when **Force T-Pose** is on) |
+| Avatar size, including a scaled avatar root | Scaled so the meshes are 1.6 m tall when **Scale to height** is on (change the height in the window, or turn it off to keep the original size). The window shows the avatar's current height and the factor. Height runs from the lowest to the highest vertex, so ears and hair count. |
 | PhysBone | Spring per unbranched bone chain. Pull + stiffness map to stiffness, momentum to drag, gravity to gravity power, radius to joint radius. The PhysBone curves are applied per joint, and the endpoint position adds a tail bone. Ignore transforms are respected. |
 | PhysBone Collider | Spring bone collider plus collider group: sphere, capsule, plane, and the inside sphere and capsule variants |
 | Viseme blend shapes (aa, E, ih, oh, ou) | Expressions aa, ee, ih, oh, ou |

@@ -55,7 +55,6 @@ namespace VrcToVrm {
                 if (avatar && string.IsNullOrEmpty(vrm.Meta.Name)) vrm.Meta.Name = avatar.name;
                 Measure();
             }
-            EditorGUILayout.HelpBox("Using VRCFury or Modular Avatar? Bake the avatar first (e.g. MA's Manual Bake), this tool reads the plain components.", MessageType.None);
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Meta", EditorStyles.boldLabel);
@@ -63,6 +62,8 @@ namespace VrcToVrm {
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Options", EditorStyles.boldLabel);
+            options.Bake = EditorGUILayout.Toggle(new GUIContent("Bake first",
+                "Runs the upload build steps (VRCFury, Modular Avatar, other NDMF tools) on a copy and converts that copy"), options.Bake);
             options.TPose = EditorGUILayout.Toggle(new GUIContent("Force T-Pose", "VRM 1.0 expects the model in T-pose"), options.TPose);
             options.ConvertMaterials = EditorGUILayout.Toggle(new GUIContent("Materials to MToon", "Off: materials are exported as plain glTF PBR"), options.ConvertMaterials);
             options.ScaleToHeight = EditorGUILayout.Toggle(new GUIContent("Scale to height", "Most VRM games expect a human-sized avatar"), options.ScaleToHeight);

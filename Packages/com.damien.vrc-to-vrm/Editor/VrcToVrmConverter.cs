@@ -7,12 +7,15 @@ using UnityEngine;
 using UniVRM10;
 using VRC.Dynamics;
 using VRC.SDK3.Avatars.Components;
+using VRC.SDKBase.Editor.BuildPipeline;
 using VRM10.MToon10;
 using Object = UnityEngine.Object;
 
 namespace VrcToVrm {
     [Serializable]
     public class ConvertOptions {
+        // Run the upload build steps on the copy first, so VRCFury, Modular Avatar and other NDMF tools apply their changes.
+        public bool Bake = true;
         public bool TPose = true;
         public bool ConvertMaterials = true;
         // Tiny or huge avatars are scaled so the mesh is this tall (metres); most VRM games expect human size.
@@ -31,8 +34,11 @@ namespace VrcToVrm {
             var root = Object.Instantiate(avatar.gameObject);
             var temp = new List<Object> { root };
             try {
-                root.name = avatar.name;
                 root.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+                // Same as VRCFury's "Build an editor test copy": the SDK runs every tool's upload hook on the copy.
+                if (o.Bake && !VRCBuildPipelineCallbacks.OnPreprocessAvatar(root))
+                    throw new InvalidOperationException("A build tool stopped the bake. The Console says which one.");
+                root.name = avatar.name;
                 foreach (var t in root.GetComponentsInChildren<Transform>(true))
                     if (t && t != root.transform && t.CompareTag("EditorOnly")) Object.DestroyImmediate(t.gameObject);
 
@@ -71,6 +77,8 @@ namespace VrcToVrm {
                 Export(root, meta, path);
             } finally {
                 foreach (var x in temp) if (x) Object.DestroyImmediate(x);
+                // lilToon restores its shader settings here and NDMF deletes its temporary assets
+                if (o.Bake) VRCBuildPipelineCallbacks.OnPostprocessAvatar();
             }
         }
 

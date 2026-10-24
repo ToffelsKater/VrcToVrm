@@ -18,6 +18,7 @@
     "overrideReferences": true,
     "precompiledReferences": [
         "VRCSDKBase.dll",
+        "VRCSDKBase-Editor.dll",
         "VRCSDK3A.dll",
         "VRC.Dynamics.dll",
         "VRC.SDK3.Dynamics.PhysBone.dll"

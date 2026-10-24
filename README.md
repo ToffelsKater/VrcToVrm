@@ -42,7 +42,7 @@ To install UniVRM by hand instead, add these lines to `dependencies` in `Package
 3. Fill in the meta: name, authors, version, thumbnail and the license fields (who may use the avatar, commercial use, redistribution, and so on). Name and at least one author are required.
 4. Set the options and click **Export VRM 1.0**.
 
-If the avatar uses VRCFury or Modular Avatar, bake it first (for example Modular Avatar's Manual Bake). The tool reads the plain components only.
+With **Bake first** on (the default), the copy is built the way an upload builds it before conversion: VRCFury, Modular Avatar and other NDMF tools apply their changes, the same as VRCFury's "Build an editor test copy". Afterwards the post-build cleanup runs, so lilToon restores its shader settings and NDMF removes its temporary files. Turn it off to convert the avatar exactly as it is in the scene.
 
 ## What gets converted
 
@@ -57,6 +57,7 @@ If the avatar uses VRCFury or Modular Avatar, bake it first (for example Modular
 | Eyelid blend shapes (blink, looking up, looking down) | Expressions blink, lookUp, lookDown |
 | View position | LookAt offset from the head (first-person eye point) |
 | Materials (lilToon, Poiyomi, Standard, UTS, MToon 0.x) | MToon 1.0: main texture and color, shade color and texture, normal map, emission, alpha mode (opaque, cutout, transparent), cutoff, culling, tiling, and lilToon outlines |
+| VRCFury, Modular Avatar, other NDMF tools | Applied to the copy before conversion (**Bake first**) |
 | Objects tagged EditorOnly | Removed |
 | Disabled meshes | Not exported |
 

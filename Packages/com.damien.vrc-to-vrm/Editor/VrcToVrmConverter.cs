@@ -86,6 +86,7 @@ namespace VrcToVrm {
 
                 Expressions(root.transform, descriptor, vrm.Expression, temp);
                 MergeMeshes(root.transform, vrm.Expression, temp);
+                FillUvAndNormals(root.transform, temp);
                 vrm.LookAt.OffsetFromHead = eye - animator.GetBoneTransform(HumanBodyBones.Head).position;
                 Springs(root.transform, instance.SpringBone, o);
                 if (o.ConvertMaterials) Materials(root, temp);
@@ -270,6 +271,20 @@ namespace VrcToVrm {
                     .Where(b => remap.ContainsKey((b.RelativePath, b.Index)))
                     .Select(b => new MorphTargetBinding(host.name, remap[(b.RelativePath, b.Index)], b.Weight))
                     .Distinct().ToArray();
+        }
+
+        // UniVRM's mesh writer needs UVs and normals on every mesh. Static meshes such as lenses or effect planes sometimes have none.
+        static void FillUvAndNormals(Transform root, List<Object> temp) {
+            foreach (var filter in root.GetComponentsInChildren<MeshFilter>()) {
+                var mesh = filter.sharedMesh;
+                if (!mesh || mesh.uv.Length == mesh.vertexCount && mesh.normals.Length == mesh.vertexCount) continue;
+                var copy = Object.Instantiate(mesh);
+                copy.name = mesh.name;
+                temp.Add(copy);
+                if (copy.uv.Length != copy.vertexCount) copy.uv = new Vector2[copy.vertexCount];
+                if (copy.normals.Length != copy.vertexCount) copy.RecalculateNormals();
+                filter.sharedMesh = copy;
+            }
         }
 
         /// <summary>

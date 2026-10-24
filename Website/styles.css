@@ -1,10 +1,13 @@
 /* Metro: flat colour, square corners, light lowercase type, tiles. */
 :root {
-  --bg: #000;
+  /* Windows 8 start screen: one deep colour with faint line art */
+  --bg: #1a0f45;
   --fg: #fff;
-  --subtle: #a6a6a6;
-  --chrome: #1f1f1f;
-  --line: #3a3a3a;
+  --subtle: #b9b3d6;
+  --chrome: rgba(255, 255, 255, .07);
+  --line: rgba(255, 255, 255, .2);
+  --pat: rgba(255, 255, 255, .09);
+  --pat-accent: rgba(27, 161, 226, .55);
   --accent: #0050ef;
   --font: "Segoe UI", "Segoe UI Web (West European)", "Open Sans", -apple-system, sans-serif;
   --ease: cubic-bezier(.1, .9, .2, 1);
@@ -15,11 +18,13 @@
 }
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #fff;
+    --bg: #f3f1fa;
     --fg: #000;
-    --subtle: #5c5c5c;
-    --chrome: #f2f2f2;
-    --line: #c8c8c8;
+    --subtle: #4f4a63;
+    --chrome: rgba(26, 15, 69, .06);
+    --line: rgba(26, 15, 69, .22);
+    --pat: rgba(26, 15, 69, .1);
+    --pat-accent: rgba(0, 80, 239, .4);
     color-scheme: light;
   }
 }
@@ -40,6 +45,18 @@ code { font-family: Consolas, "Cascadia Mono", ui-monospace, monospace; font-siz
 .wrap { padding-inline: var(--gutter); max-width: 1440px; margin-inline: auto; }
 .skip { position: absolute; left: -999px; top: 0; background: var(--accent); color: #fff; padding: 8px 12px; z-index: 10; }
 .skip:focus { left: 8px; top: 8px; }
+
+/* start-screen backdrop: fixed line art that drifts slower than the page (--py set in app.js) */
+.backdrop {
+  position: fixed; left: 0; top: 0; z-index: -1;
+  width: 100%; height: calc(100vh + 480px);
+  transform: translateY(var(--py, 0px));
+  pointer-events: none;
+}
+.pat { fill: none; stroke: var(--pat); stroke-width: 1.5; }
+.pat .fill { fill: var(--pat); stroke: none; }
+.pat .accent { stroke: var(--pat-accent); stroke-width: 14; }
+.pat .accent.thin { stroke-width: 2; }
 
 /* pivot header */
 .pivot {

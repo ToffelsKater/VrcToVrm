@@ -41,8 +41,22 @@ const groupObserver = new IntersectionObserver(entries => {
 }, { threshold: .15 });
 document.querySelectorAll('.group').forEach(g => groupObserver.observe(g));
 
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Start-screen parallax: the backdrop scrolls at a fraction of the page speed, capped to the 480px it has spare.
+if (!reduceMotion) {
+  let frame = 0;
+  addEventListener('scroll', () => {
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      document.documentElement.style.setProperty('--py', `${Math.max(-460, -scrollY * .12).toFixed(1)}px`);
+    });
+  }, { passive: true });
+}
+
 // Metro tilt: a pressed tile leans away from the pointer.
-if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+if (!reduceMotion) {
   document.querySelectorAll('.tile').forEach(tile => {
     tile.addEventListener('pointerdown', e => {
       const r = tile.getBoundingClientRect();
